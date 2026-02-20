@@ -1,0 +1,26 @@
+# Игнорируем большие файлы данных
+data/raw/
+data/interim/
+*.parquet
+*.snappy
+*.csv
+*.xlsx
+*.zip
+
+# Игнорируем временные файлы
+*.tmp
+*.swp
+*.swo
+*.ipynb_checkpoints
+
+# Игнорируем виртуальные окружения
+venv/
+env/
+.venv
+
+# Игнорируем логи
+logs/
+
+# Игнорируем файлы конфигурации
+.env
+.env.local
