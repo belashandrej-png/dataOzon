@@ -1,3 +1,30 @@
+# ============================================
+# AUTO-INSTALLER FOR MISSING LIBRARIES
+# ============================================
+import subprocess
+import sys
+
+def install_if_missing(package, import_name=None):
+    """Install package if it's not available"""
+    if import_name is None:
+        import_name = package
+    
+    try:
+        __import__(import_name)
+    except ImportError:
+        print(f"Installing {package}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        print(f"✅ {package} installed!")
+
+# Auto-install required packages
+install_if_missing("streamlit")
+install_if_missing("pandas")
+install_if_missing("plotly")
+install_if_missing("wordcloud")
+install_if_missing("matplotlib")
+install_if_missing("PIL", "Pillow")
+
+# Now import all libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,6 +33,10 @@ from collections import Counter
 import re
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
+
+# ============================================
+# MAIN DASHBOARD CODE
+# ============================================
 
 st.set_page_config(page_title="Mimovrste Analytics", layout="wide", page_icon="📊")
 
@@ -18,7 +49,8 @@ def load_data():
     try:
         file_path = 'O:/extracted/mimodump-dataset.csv'
         if not os.path.exists(file_path):
-            st.error("File not found!")
+            st.error("❌ File not found: " + file_path)
+            st.info("Please make sure the file exists at this path.")
             return None
         df = pd.read_csv(file_path, nrows=50000, sep=';', low_memory=False, encoding='utf-8')
         
@@ -29,7 +61,7 @@ def load_data():
         
         return df
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"❌ Error loading data: {e}")
         return None
 
 df = load_data()
@@ -38,7 +70,7 @@ if df is not None:
     st.success(f"✅ Loaded {len(df):,} items")
     
     # Sidebar filters
-    st.sidebar.header("Filters")
+    st.sidebar.header("⚙️ Filters")
     if 'brand_name' in df.columns:
         brands = df['brand_name'].value_counts().head(20).index
         selected_brands = st.sidebar.multiselect("Brands:", options=brands, default=list(brands[:5]))
@@ -48,22 +80,26 @@ if df is not None:
     if 'price' in df.columns:
         valid_prices = df['price'].dropna()
         if len(valid_prices) > 0:
-            price_range = st.sidebar.slider("Price range:", min_value=float(valid_prices.min()), max_value=float(valid_prices.max()), value=(float(valid_prices.min()), min(float(valid_prices.max()), 500.0)))
+            price_range = st.sidebar.slider("Price range (EUR):", 
+                                           min_value=float(valid_prices.min()), 
+                                           max_value=float(valid_prices.max()), 
+                                           value=(float(valid_prices.min()), min(float(valid_prices.max()), 500.0)))
             df = df[(df['price'] >= price_range[0]) & (df['price'] <= price_range[1])]
 
     # Metrics
+    st.markdown("### 📊 Key Metrics")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Items", f"{len(df):,}")
+    col1.metric("📦 Total Items", f"{len(df):,}")
     if 'brand_name' in df.columns:
-        col2.metric("Brands", df['brand_name'].nunique())
+        col2.metric("🏷️ Brands", df['brand_name'].nunique())
     if 'price' in df.columns:
-        col3.metric("Avg Price", f"{df['price'].mean():.2f} EUR")
+        col3.metric("💰 Avg Price", f"{df['price'].mean():.2f} EUR")
     if 'review_stars' in df.columns:
-        col4.metric("Rating", f"{df['review_stars'].mean():.2f}/5")
+        col4.metric("⭐ Rating", f"{df['review_stars'].mean():.2f}/5")
 
     st.markdown("---")
 
-    # GRAPHS 1
+    # GRAPHS 1: Categories & Price Distribution
     col_a, col_b = st.columns(2)
     
     with col_a:
@@ -71,14 +107,16 @@ if df is not None:
             st.subheader("📊 Categories Structure")
             cat_counts = df['category_name'].value_counts().head(15).reset_index()
             cat_counts.columns = ['Category', 'Count']
-            fig = px.treemap(cat_counts, path=['Category'], values='Count', color='Count', color_continuous_scale='Viridis')
+            fig = px.treemap(cat_counts, path=['Category'], values='Count', 
+                           color='Count', color_continuous_scale='Viridis')
             st.plotly_chart(fig, use_container_width=True)
 
     with col_b:
         if 'price' in df.columns:
             st.subheader("💸 Price Distribution")
             df_clean = df[(df['price'] > 0) & (df['price'] < 500)].dropna(subset=['price'])
-            fig = px.histogram(df_clean, x='price', nbins=50, color_discrete_sequence=['#FF6B6B'])
+            fig = px.histogram(df_clean, x='price', nbins=50, 
+                             color_discrete_sequence=['#FF6B6B'])
             st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
@@ -91,7 +129,8 @@ if df is not None:
             st.subheader("🏆 Top Brands")
             brand_counts = df['brand_name'].value_counts().head(10).reset_index()
             brand_counts.columns = ['Brand', 'Count']
-            fig = px.bar(brand_counts, x='Count', y='Brand', orientation='h', color='Count', color_continuous_scale='Rainbow')
+            fig = px.bar(brand_counts, x='Count', y='Brand', orientation='h', 
+                        color='Count', color_continuous_scale='Rainbow')
             st.plotly_chart(fig, use_container_width=True)
 
     with c2:
@@ -102,7 +141,7 @@ if df is not None:
             fig = px.box(df_box, x='category_name', y='price', color='category_name')
             st.plotly_chart(fig, use_container_width=True)
 
-    # NEW: WORD CLOUD
+    # WORD CLOUD ANALYSIS
     st.markdown("---")
     st.subheader("🔑 Word Cloud - Product Names")
     
@@ -132,41 +171,47 @@ if df is not None:
         with col_wc1:
             st.subheader("Word Cloud Visualization")
             
-            # Generate word cloud
-            wc = WordCloud(
-                width=1200, 
-                height=600, 
-                background_color='white',
-                colormap='viridis',
-                max_words=200,
-                min_font_size=5,
-                max_font_size=150,
-                random_state=42,
-                contour_width=1,
-                contour_color='steelblue'
-            ).generate_from_frequencies(word_freq)
-            
-            # Display
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax.imshow(wc, interpolation='bilinear')
-            ax.axis('off')
-            plt.tight_layout()
-            st.pyplot(fig)
+            if len(word_freq) > 0:
+                # Generate word cloud
+                wc = WordCloud(
+                    width=1200, 
+                    height=600, 
+                    background_color='white',
+                    colormap='viridis',
+                    max_words=200,
+                    min_font_size=5,
+                    max_font_size=150,
+                    random_state=42,
+                    contour_width=1,
+                    contour_color='steelblue'
+                ).generate_from_frequencies(word_freq)
+                
+                # Display
+                fig, ax = plt.subplots(figsize=(12, 6))
+                ax.imshow(wc, interpolation='bilinear')
+                ax.axis('off')
+                plt.tight_layout()
+                st.pyplot(fig)
+            else:
+                st.warning("⚠️ No words found after filtering")
         
         with col_wc2:
             st.subheader("Top 30 Words")
-            top_words = word_freq.most_common(30)
-            top_df = pd.DataFrame(top_words, columns=['Word', 'Frequency'])
-            
-            # Bar chart
-            fig_bar = px.bar(top_df, x='Frequency', y='Word', orientation='h',
-                            color='Frequency', color_continuous_scale='Plasma')
-            fig_bar.update_layout(yaxis={'categoryorder': 'total ascending'})
-            st.plotly_chart(fig_bar, use_container_width=True)
-            
-            # Stats
-            st.metric("Total Words", f"{len(words):,}")
-            st.metric("Unique Words", f"{len(word_freq):,}")
+            if len(word_freq) > 0:
+                top_words = word_freq.most_common(30)
+                top_df = pd.DataFrame(top_words, columns=['Word', 'Frequency'])
+                
+                # Bar chart
+                fig_bar = px.bar(top_df, x='Frequency', y='Word', orientation='h',
+                                color='Frequency', color_continuous_scale='Plasma')
+                fig_bar.update_layout(yaxis={'categoryorder': 'total ascending'})
+                st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # Stats
+                st.metric("Total Words", f"{len(words):,}")
+                st.metric("Unique Words", f"{len(word_freq):,}")
+            else:
+                st.info("No data to display")
 
     st.markdown("---")
     st.subheader("📋 Data Preview")
@@ -175,4 +220,5 @@ if df is not None:
     st.dataframe(df[available_cols].head(50), use_container_width=True)
 
 else:
-    st.warning("⚠️ No data loaded")
+    st.warning("⚠️ No data loaded - please check file path")
+    st.info("Expected path: O:/extracted/mimodump-dataset.csv")
